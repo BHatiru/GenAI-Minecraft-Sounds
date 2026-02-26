@@ -1,0 +1,77 @@
+# ── Demo 1 configuration ─────────────────────────────────────────────
+# Paths (can be overridden via CLI flags)
+paths:
+  raw_assets: data/raw                  # where fetch_minecraft_assets puts .ogg files
+  processed:  data/processed            # output of preprocess_audio (16 kHz mono .wav)
+  manifest:   data/manifest.csv         # metadata.csv with file_name + caption
+  baseline_outputs: outputs/demo1/baseline
+  lora_outputs:     outputs/demo1/lora
+  lora_weights:     outputs/demo1/lora_weights
+
+# Which Minecraft sound categories to download
+# Each entry maps to assets/minecraft/sounds/<category> in the repo
+# Actual repo structure: sounds/mob/<name>/*.ogg  (flat, no sub-folders)
+categories:
+  # Hostile mobs
+  - mob/zombie           # 22 files
+  - mob/skeleton         # 12 files
+  - mob/creeper          # ~5 files
+  - mob/spider           # ~5 files
+  - mob/endermen         # ~10 files
+  - mob/blaze            # ~10 files
+  - mob/ghast            # ~10 files
+  # Ambient sounds
+  - ambient/cave         # cave ambience
+  - ambient/nether       # nether ambience
+  - ambient/underwater   # underwater ambience
+  - ambient/weather      # weather sounds (rain, thunder)
+  # Other useful categories
+  - damage               # 5 files  (hit / fall sounds)
+  - step                 # 58 files (footstep surfaces)
+
+# Audio preprocessing
+audio:
+  sample_rate: 16000
+  channels: 1            # mono
+  clip_length_s: 4.0     # pad / trim every clip to this length
+  silence_top_db: 30     # threshold for silence trimming (librosa)
+  # Gaps between sounds in composed sequences
+  mob_gap_s: 0.7         # gap between mob action variants
+  step_gap_s: 0.1        # gap between footstep variants
+  damage_gap_s: 0.5      # gap between damage hit sounds
+
+# Caption templates  –  {entity} and {action} are filled from folder names
+caption_template: "minecraft {entity} {action} sound effect"
+
+# Train / val split
+split:
+  val_fraction: 0.15
+  seed: 42
+
+# AudioLDM2 inference
+inference:
+  model_id: cvssp/audioldm2
+  num_samples: 8           # how many wavs to generate per prompt
+  audio_length_in_s: 4.0
+  num_inference_steps: 50
+  guidance_scale: 3.5
+  seed: 42
+
+# LoRA training hyper-parameters
+lora:
+  rank: 8
+  alpha: 16
+  dropout: 0.0
+  target_modules:          # UNet cross-attention projections
+    - to_k
+    - to_q
+    - to_v
+    - to_out.0
+  learning_rate: 1.0e-4
+  batch_size: 1
+  gradient_accumulation_steps: 4
+  max_train_steps: 500
+  lr_scheduler: cosine
+  warmup_steps: 50
+  mixed_precision: fp16
+  seed: 42

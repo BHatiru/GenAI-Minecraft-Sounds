@@ -1,0 +1,37 @@
+# Data & outputs (do NOT commit)
+data/
+outputs/
+*.wav
+*.ogg
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Environments
+.venv/
+venv/
+env/
+
+# Jupyter / Colab
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Model weights
+*.safetensors
+*.bin
+*.pt
+*.ckpt

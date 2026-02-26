@@ -1,0 +1,21 @@
+# Core audio processing
+librosa>=0.10
+soundfile>=0.12
+pydub>=0.25
+
+# ML / diffusion
+torch>=2.0
+diffusers>=0.27
+transformers>=4.36
+accelerate>=0.25
+peft>=0.7
+
+# Data & config
+pyyaml>=6.0
+requests>=2.31
+datasets>=2.16
+
+# Utilities
+numpy>=1.24
+scipy>=1.11
+tqdm>=4.66
