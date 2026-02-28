@@ -69,6 +69,17 @@ def generate(
     pipe = AudioLDM2Pipeline.from_pretrained(model_id, torch_dtype=dtype)
     pipe = pipe.to(device)
 
+    # ── Work around transformers ≥ 4.45 returning ModelOutput instead of
+    #    plain tensors, which breaks AudioLDM2's prompt_embeds[:, None, :].
+    #    Force all sub-models to return tuples.  Harmless on older versions.
+    for submodel in ("text_encoder", "text_encoder_2", "language_model"):
+        m = getattr(pipe, submodel, None)
+        if m is not None and hasattr(m, "config"):
+            try:
+                m.config.return_dict = False
+            except Exception:
+                pass
+
     # Optionally load LoRA adapter
     if lora_weights and Path(lora_weights).exists():
         log.info("Loading LoRA weights from %s", lora_weights)
