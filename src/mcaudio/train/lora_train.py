@@ -113,7 +113,7 @@ def waveform_to_mel(
         return_tensors="pt",
         padding="max_length",
         max_length=target_length,
-        truncation=True,
+        truncation="fusion",
     )
     # Shape: (B, freq_bins, time) → add channel dim → (B, 1, freq, time)
     mel = features["input_features"]
