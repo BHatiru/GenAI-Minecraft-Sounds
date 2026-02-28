@@ -48,7 +48,7 @@ def generate(
     prompt: str,
     model_id: str = "cvssp/audioldm2",
     lora_weights: str | None = None,
-    num_samples: int = 8,
+    num_samples: int = 4,
     audio_length_in_s: float = 4.0,
     num_inference_steps: int = 50,
     guidance_scale: float = 3.5,
@@ -62,23 +62,48 @@ def generate(
     """
     from diffusers import AudioLDM2Pipeline
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    dtype = torch.float16 if device == "cuda" else torch.float32
+    if torch.cuda.is_available():
+        device = "cuda"
+        dtype = torch.float16
+    elif torch.backends.mps.is_available():
+        device = "mps"
+        dtype = torch.float32
+    else:
+        device = "cpu"
+        dtype = torch.float32
 
     log.info("Loading AudioLDM2 pipeline: %s", model_id)
     pipe = AudioLDM2Pipeline.from_pretrained(model_id, torch_dtype=dtype)
     pipe = pipe.to(device)
 
-    # ── Work around transformers ≥ 4.45 returning ModelOutput instead of
-    #    plain tensors, which breaks AudioLDM2's prompt_embeds[:, None, :].
-    #    Force all sub-models to return tuples.  Harmless on older versions.
-    for submodel in ("text_encoder", "text_encoder_2", "language_model"):
-        m = getattr(pipe, submodel, None)
-        if m is not None and hasattr(m, "config"):
-            try:
-                m.config.return_dict = False
-            except Exception:
-                pass
+    # ── Fix 1: transformers ≥ 5.x changed ClapModel.get_text_features() to
+    #    return BaseModelOutputWithPooling instead of a plain tensor, breaking
+    #    AudioLDM2's `prompt_embeds[:, None, :]`. Unwrap .pooler_output.
+    if hasattr(pipe, "text_encoder"):
+        _orig_gtf = pipe.text_encoder.get_text_features
+        def _patched_gtf(*args, **kwargs):
+            out = _orig_gtf(*args, **kwargs)
+            if hasattr(out, "pooler_output"):
+                return out.pooler_output
+            if isinstance(out, tuple):
+                return out[1]  # pooler_output is second element in tuple form
+            return out
+        pipe.text_encoder.get_text_features = _patched_gtf
+
+    # ── Fix 2: the cvssp/audioldm2 checkpoint stores language_model with
+    #    `"architectures": ["GPT2Model"]`, so transformers 5.x loads the base
+    #    GPT2Model which lacks GenerationMixin (_get_initial_cache_position,
+    #    _update_model_kwargs_for_generation). Swap to GPT2LMHeadModel with
+    #    the same weights; LM head is weight-tied to embeddings.
+    from transformers.models.gpt2.modeling_gpt2 import GPT2Model as _GPT2Model
+    if isinstance(pipe.language_model, _GPT2Model):
+        from transformers import GPT2LMHeadModel
+        _orig_lm = pipe.language_model
+        _lm_head = GPT2LMHeadModel(_orig_lm.config)
+        _lm_head.transformer.load_state_dict(_orig_lm.state_dict())
+        _lm_head = _lm_head.to(device=next(_orig_lm.parameters()).device, dtype=dtype)
+        pipe.language_model = _lm_head
+        log.info("Swapped GPT2Model → GPT2LMHeadModel for GenerationMixin compatibility")
 
     # Optionally load LoRA adapter
     if lora_weights and Path(lora_weights).exists():
@@ -134,7 +159,7 @@ def main(argv: list[str] | None = None) -> None:
     # Defaults
     kwargs: dict = dict(
         model_id="cvssp/audioldm2",
-        num_samples=8,
+        num_samples=4,
         audio_length_in_s=4.0,
         num_inference_steps=50,
         guidance_scale=3.5,

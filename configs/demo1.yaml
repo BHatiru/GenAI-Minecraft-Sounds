@@ -51,7 +51,7 @@ split:
 # AudioLDM2 inference
 inference:
   model_id: cvssp/audioldm2
-  num_samples: 8           # how many wavs to generate per prompt
+  num_samples: 4           # how many wavs to generate per prompt
   audio_length_in_s: 4.0
   num_inference_steps: 50
   guidance_scale: 3.5
