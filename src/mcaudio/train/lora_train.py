@@ -105,15 +105,14 @@ def waveform_to_mel(
     -------
     mel : (B, 1, freq_bins, target_length) float32 tensor
     """
-    # feature_extractor expects list of numpy arrays
+    # feature_extractor expects list of numpy arrays.
+    # Use the same defaults the pipeline uses internally:
+    #   truncation="fusion", padding="repeatpad"
     batch_np = [w.cpu().numpy() for w in waveform]
     features = feature_extractor(
         batch_np,
         sampling_rate=feature_extractor.sampling_rate,
         return_tensors="pt",
-        padding="max_length",
-        max_length=target_length,
-        truncation="fusion",
     )
     # Shape: (B, freq_bins, time) → add channel dim → (B, 1, freq, time)
     mel = features["input_features"]
