@@ -50,8 +50,8 @@ def generate(
     lora_weights: str | None = None,
     num_samples: int = 4,
     audio_length_in_s: float = 4.0,
-    num_inference_steps: int = 50,
-    guidance_scale: float = 3.5,
+    num_inference_steps: int = 200,
+    guidance_scale: float = 4.5,
     seed: int = 42,
     output_dir: str = "outputs/demo1/baseline",
 ) -> list[Path]:
@@ -164,8 +164,8 @@ def main(argv: list[str] | None = None) -> None:
         model_id="cvssp/audioldm2",
         num_samples=4,
         audio_length_in_s=4.0,
-        num_inference_steps=50,
-        guidance_scale=3.5,
+        num_inference_steps=200,
+        guidance_scale=4.5,
         seed=42,
         output_dir="outputs/demo1/baseline",
     )
