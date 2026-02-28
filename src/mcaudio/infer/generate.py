@@ -108,7 +108,10 @@ def generate(
     # Optionally load LoRA adapter
     if lora_weights and Path(lora_weights).exists():
         log.info("Loading LoRA weights from %s", lora_weights)
-        pipe.unet.load_attn_procs(lora_weights)
+        from peft import PeftModel
+        pipe.unet = PeftModel.from_pretrained(pipe.unet, lora_weights)
+        pipe.unet.eval()
+        log.info("LoRA adapter loaded and merged into UNet")
 
     generator = seed_everything(seed)
 
