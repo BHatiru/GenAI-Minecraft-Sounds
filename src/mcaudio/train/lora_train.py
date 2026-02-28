@@ -86,52 +86,84 @@ class McAudioDataset(Dataset):
 #  Audio → MEL → Latent helpers
 # ═══════════════════════════════════════════════════════════════════
 
+@torch.no_grad()
 def waveform_to_mel(
     waveform: torch.Tensor,
-    feature_extractor,
-    target_length: int = 512,
+    device: torch.device,
+    dtype: torch.dtype,
+    sr: int = 16000,
+    n_fft: int = 1024,
+    hop_length: int = 160,
+    win_length: int = 1024,
+    n_mels: int = 64,
+    fmin: float = 0.0,
+    fmax: float = 8000.0,
 ) -> torch.Tensor:
     """
-    Convert a batch of waveforms to mel spectrogram tensors
-    suitable for the AudioLDM2 VAE.
+    Compute log-mel spectrogram matching AudioLDM2's VAE training format.
+
+    IMPORTANT: The CLAP feature_extractor (pipe.feature_extractor) must NOT
+    be used here — CLAP operates at 48 kHz / hop=480 while the AudioLDM2 VAE
+    was trained on mel spectrograms computed at 16 kHz / hop=160.
+    Using the wrong mel produces latents in a completely different space,
+    causing LoRA training to learn garbage.
 
     Parameters
     ----------
     waveform : (B, T) float32 tensor at 16 kHz
-    feature_extractor : the pipeline's feature_extractor
-    target_length : mel time-frames (512 for ≈4 s at 16 kHz)
+    device : target device
+    dtype : target dtype
 
     Returns
     -------
-    mel : (B, 1, freq_bins, target_length) float32 tensor
+    mel : (B, 1, n_mels, T) tensor
     """
-    # feature_extractor expects list of numpy arrays.
-    # Use the same defaults the pipeline uses internally:
-    #   truncation="fusion", padding="repeatpad"
-    batch_np = [w.cpu().numpy() for w in waveform]
-    features = feature_extractor(
-        batch_np,
-        sampling_rate=feature_extractor.sampling_rate,
-        return_tensors="pt",
+    import librosa as _librosa
+
+    # Build mel filter bank (same as AudioLDM's TacotronSTFT)
+    mel_basis_np = _librosa.filters.mel(
+        sr=sr, n_fft=n_fft, n_mels=n_mels, fmin=fmin, fmax=fmax,
     )
-    # Shape: (B, freq_bins, time) → add channel dim → (B, 1, freq, time)
-    mel = features["input_features"]
-    if mel.dim() == 3:
-        mel = mel.unsqueeze(1)
-    return mel
+    mel_basis = torch.from_numpy(mel_basis_np).float().to(device)
+    hann_window = torch.hann_window(win_length).to(device)
+
+    wav = waveform.float().to(device)
+    if wav.dim() == 1:
+        wav = wav.unsqueeze(0)
+
+    # STFT → magnitude → mel filter → log compression
+    stft_complex = torch.stft(
+        wav, n_fft,
+        hop_length=hop_length, win_length=win_length,
+        window=hann_window, center=True, pad_mode="reflect",
+        normalized=False, onesided=True, return_complex=True,
+    )  # (B, n_fft//2+1, T_frames)
+    magnitudes = stft_complex.abs()
+    mel = torch.matmul(mel_basis, magnitudes)   # (B, n_mels, T)
+    mel = torch.log(mel.clamp(min=1e-5))        # dynamic-range compression
+
+    # (B, 1, n_mels, T)
+    return mel.unsqueeze(1).to(dtype=dtype)
 
 
 @torch.no_grad()
 def encode_audio_to_latents(
     waveform: torch.Tensor,
     vae,
-    feature_extractor,
     device: torch.device,
     dtype: torch.dtype,
 ) -> torch.Tensor:
-    """Waveform → mel → VAE encoder → latent (B, C, H, W)."""
-    mel = waveform_to_mel(waveform, feature_extractor)
-    mel = mel.to(device=device, dtype=dtype)
+    """Waveform → mel (AudioLDM2 format) → VAE encoder → latent (B, C, H, W)."""
+    mel = waveform_to_mel(waveform, device=device, dtype=dtype)
+
+    # Pad spatial dims to be divisible by VAE downsampling factor
+    vae_sf = 2 ** (len(vae.config.block_out_channels) - 1)
+    _, _, h, w = mel.shape
+    pad_h = (vae_sf - h % vae_sf) % vae_sf
+    pad_w = (vae_sf - w % vae_sf) % vae_sf
+    if pad_h > 0 or pad_w > 0:
+        mel = F.pad(mel, (0, pad_w, 0, pad_h))
+
     posterior = vae.encode(mel).latent_dist
     latents = posterior.sample() * vae.config.scaling_factor
     return latents
@@ -253,7 +285,6 @@ def train(
 
     unet = pipe.unet
     vae = pipe.vae
-    feature_extractor = pipe.feature_extractor
 
     # ── Freeze everything ────────────────────────────────────────
     vae.requires_grad_(False)
@@ -329,7 +360,7 @@ def train(
 
             # ── Encode audio → latents (no grad) ─────────────────
             latents = encode_audio_to_latents(
-                waveforms, vae, feature_extractor,
+                waveforms, vae,
                 device=device, dtype=weight_dtype,
             )
 
