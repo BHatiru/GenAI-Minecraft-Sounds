@@ -264,21 +264,21 @@ def train(
     lm = model.lm           # LanguageModel — the transformer we fine-tune
     encodec = model.compression_model   # EnCodec — frozen tokenizer
 
-    lm.to(device)
-    encodec.to(device)
-
-    # ── Freeze everything first ─────────────────────────────────────
-    for param in lm.parameters():
-        param.requires_grad = False
-    for param in encodec.parameters():
-        param.requires_grad = False
-    encodec.eval()
-
-    # ── Inject LoRA ─────────────────────────────────────────────────
+    # ── Inject LoRA BEFORE moving to device (so adapters move too) ──
     n_adapters = inject_lora(
         lm, lora_targets,
         rank=lora_rank, alpha=lora_alpha, dropout=lora_dropout,
     )
+
+    # FP32 + CUDA — avoid AudioCraft NaN bug with mixed precision
+    lm.to(device).float()
+    encodec.to(device).float()
+
+    # ── Freeze everything except LoRA ───────────────────────────────
+    for param in encodec.parameters():
+        param.requires_grad = False
+    encodec.eval()
+
     frozen_count, trainable_count = freeze_base_params(lm)
     log.info(
         "LoRA injected: %d adapters | Trainable: %.2f M | Frozen: %.2f M",
@@ -341,9 +341,12 @@ def train(
             # ── Encode audio → discrete codes ───────────────────
             with torch.no_grad():
                 encoded = encodec.encode(wav)
-                # encoded is a list of tuples: [(codes, scale), ...]
-                # codes shape: (B, K, T_codes)
-                codes = encoded[0][0]
+                # audiocraft ≥1.4: encode() returns (codes, scale) directly
+                # audiocraft <1.4: encode() returns [(codes, scale), ...]
+                if isinstance(encoded, tuple):
+                    codes = encoded[0]          # (B, K, T_codes)
+                else:
+                    codes = encoded[0][0]       # legacy list-of-tuples
 
             # ── Build conditioning ──────────────────────────────
             conditions = []
@@ -448,7 +451,7 @@ def _validate(lm, encodec, val_loader, device) -> float:
         captions = batch["captions"]
 
         encoded = encodec.encode(wav)
-        codes = encoded[0][0]
+        codes = encoded[0] if isinstance(encoded, tuple) else encoded[0][0]
 
         conditions = [
             ConditioningAttributes(text={"description": cap})

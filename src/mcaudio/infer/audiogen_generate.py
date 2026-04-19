@@ -73,6 +73,9 @@ def generate(
     from audiocraft.models import AudioGen
 
     model = AudioGen.get_pretrained(model_id)
+    # Ensure FP32 to avoid dtype mismatch (AudioCraft NaN bug with half)
+    model.lm.float()
+    model.compression_model.float()
     model.set_generation_params(
         duration=duration_s,
         use_sampling=use_sampling,
@@ -97,6 +100,9 @@ def generate(
                 rank=lora_rank, alpha=lora_alpha, dropout=lora_dropout,
             )
             load_lora_weights(model.lm, lora_path)
+            # Move LoRA layers to same device/dtype as the rest of the model
+            device = next(model.lm.parameters()).device
+            model.lm.to(device).float()
             model.lm.eval()
             log.info("LoRA adapter loaded into AudioGen LM")
         else:
