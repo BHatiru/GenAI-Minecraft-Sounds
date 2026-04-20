@@ -1,0 +1,132 @@
+{
+  "fad": {
+    "baseline": 6170.6318359375,
+    "lora": 3855.682861328125,
+    "gen_vanilla": 4262.9912109375,
+    "gen_lora": 2819.935302734375,
+    "note": "Fr\u00e9chet Audio Distance (mel-embedding), lower is better"
+  },
+  "kad": {
+    "baseline": 914964480.0,
+    "lora": 247883776.0,
+    "gen_vanilla": 119104512.0,
+    "gen_lora": 34085376.0,
+    "note": "Kernel Audio Distance (polynomial MMD), lower is better"
+  },
+  "inception_score": {
+    "reference": 15.989611709117561,
+    "baseline": 3.9999999984,
+    "lora": 3.9999999984,
+    "gen_vanilla": 5.164120005540914,
+    "gen_lora": 4.666017035724381,
+    "note": "Inception Score proxy (embedding diversity), higher is better"
+  },
+  "clap": {
+    "baseline_scores": [
+      0.025729143992066383,
+      0.1901581585407257,
+      0.4584268629550934,
+      0.40465497970581055,
+      -0.009281991049647331,
+      0.25145357847213745,
+      -0.20764413475990295,
+      0.019726820290088654
+    ],
+    "lora_scores": [
+      0.4151371419429779,
+      0.13832634687423706,
+      0.36730819940567017,
+      0.27598631381988525,
+      0.06005861982703209,
+      0.027153290808200836,
+      0.043950341641902924,
+      -0.030186329036951065
+    ],
+    "gen_lora_scores": [
+      0.37728214263916016,
+      0.3657093048095703,
+      0.041550811380147934,
+      0.2640301585197449,
+      0.29312923550605774,
+      0.3983888030052185,
+      0.3570128381252289,
+      0.39261937141418457,
+      0.11612612754106522,
+      0.2376926988363266,
+      0.12249314785003662
+    ],
+    "gen_vanilla_scores": [
+      0.31522494554519653,
+      0.35670116543769836,
+      0.38544365763664246,
+      0.31228047609329224,
+      0.4131971597671509,
+      0.3919203281402588,
+      0.44296568632125854,
+      0.22795608639717102,
+      0.29436153173446655,
+      0.22795608639717102,
+      0.37949204444885254
+    ],
+    "baseline_mean": 0.14165292726829648,
+    "lora_mean": 0.1622167406603694,
+    "gen_lora_mean": 0.26963951269334013,
+    "gen_vanilla_mean": 0.34068174253810535
+  },
+  "spectral": {
+    "reference": {
+      "centroid_mean": 1511.0132305088978,
+      "centroid_std": 847.99606030225,
+      "bandwidth_mean": 1238.6438461273308,
+      "rolloff_mean": 2827.562957875458,
+      "zcr_mean": 0.11332266149648962,
+      "rms_mean": 0.08795092013592903
+    },
+    "baseline": {
+      "centroid_mean": 1528.4254742616477,
+      "centroid_std": 908.9713431581323,
+      "bandwidth_mean": 1839.5430153271122,
+      "rolloff_mean": 3356.987847222222,
+      "zcr_mean": 0.06046016632564484,
+      "rms_mean": 0.06189473834820092
+    },
+    "lora": {
+      "centroid_mean": 1631.8985614424662,
+      "centroid_std": 697.9811129109293,
+      "bandwidth_mean": 1456.3973262309196,
+      "rolloff_mean": 3061.794704861111,
+      "zcr_mean": 0.13202873108878968,
+      "rms_mean": 0.08313456969335675
+    }
+  },
+  "outputs": {
+    "baseline_count": 8,
+    "lora_count": 8,
+    "generalization_count": 22,
+    "reference_count": 325
+  },
+  "training": {
+    "epochs": 25,
+    "dataset_train": 277,
+    "dataset_val": 48,
+    "lora_rank": 128,
+    "lora_alpha": 256,
+    "trainable_params_M": 132
+  },
+  "datasets": {
+    "v1_raw": 195,
+    "v1_augmented": 325,
+    "v2_expanded": 556,
+    "v1_categories": {
+      "mob": 164,
+      "combat": 24,
+      "step": 44,
+      "damage": 11,
+      "ambient": 82
+    },
+    "google_drive_links": {
+      "GenAIAudioLDM": "https://drive.google.com/drive/folders/1sGpF7I1vZnP_TgGBjJ1cytnEUAze9H5z",
+      "GenAIMinecraftAudioV2": "https://drive.google.com/drive/folders/1Pp9_s4dcRcLYosLik9eDGETSTY5lfUub"
+    }
+  }
+}
