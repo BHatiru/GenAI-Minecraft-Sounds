@@ -375,15 +375,27 @@ parameters, 50 and 100 epochs) produce intelligible Minecraft-textured
 output but lack the prompt-following ability of any of the pretrained
 backbones.
 
-\begin{figure}[t]
+\begin{table}[t]
 \centering
-\includegraphics[width=\columnwidth]{architecture_comparison.png}
-\caption{Architectural footprint of the three pretrained backbones we
-adapted. The autoregressive token model exposes a clean LoRA target on
-the language model, whereas the multi-component diffusion pipeline does
-not.}
-\label{fig:arch}
-\end{figure}
+\caption{Architectural footprint of all six approaches. ``Audio repr.''
+is the representation the generative model operates on. Training time is
+indicative wall-clock for the 25--100-epoch runs reported here.}
+\label{tab:arch}
+\setlength{\tabcolsep}{3pt}
+\footnotesize
+\begin{tabular}{lllll}
+\toprule
+Approach & Architecture & Base / Trainable & Audio repr. & Time \\
+\midrule
+AudioLDM\,2 LoRA   & Diffusion (UNet+GPT-2)   & 1.1\,B / $\sim$1\,M LoRA  & Mel spec.   & $\sim$1\,h (T4) \\
+AudioLDM Full FT   & Diffusion (all comp.)    & 400\,M / 400\,M (all)     & Mel spec.   & $\sim$2\,h (T4) \\
+AudioLDM New Data  & Diffusion (off.\ trainer)& 400\,M / 400\,M (all)     & Mel spec.   & $\sim$8\,h (T4) \\
+\textbf{AudioGen LoRA} & \textbf{Autoreg.\ + EnCodec} & \textbf{1.5\,B / 132\,M LoRA} & \textbf{EnCodec tokens} & \textbf{$\sim$3\,h (5090)} \\
+From scratch v1    & Custom Tx + T5           & 25\,M / 25\,M (all)       & EnCodec tokens & $\sim$2\,h (T4) \\
+From scratch v2    & Custom Tx + T5           & 25\,M / 25\,M (all)       & EnCodec tokens & $\sim$4\,h (T4) \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \section{Discussion}
 
