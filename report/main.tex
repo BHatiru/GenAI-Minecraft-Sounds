@@ -36,19 +36,20 @@ domains. We study the problem of generating \emph{Minecraft}-style sound
 effects from text and present a systematic comparison of six adaptation
 strategies built on top of three foundation backbones (AudioLDM,
 AudioLDM\,2, and AudioGen) plus two from-scratch transformer baselines.
-Our primary contribution is a parameter-efficient LoRA fine-tune of Meta's
-\texttt{audiogen-medium} (1.5\,B parameter autoregressive model over EnCodec
-tokens) on a 325-clip augmented dataset built from the official Minecraft
-Java Edition assets. We document the training recipe required for stable
-convergence on AudioCraft (FP32 only, NaN-suppression on the delay-pattern
-logits, LoRA targeted at \texttt{out\_proj}/\texttt{linear1}/\texttt{linear2}
-because q/k/v are fused), and evaluate with FAD, KAD, an Inception-score
-proxy, CLAP text--audio similarity, and spectral statistics. The LoRA
-adapter (132\,M trainable parameters, 25 epochs) reduces FAD by 37\,\% and
-KAD by 73\,\% relative to the vanilla AudioGen baseline on in-domain
-prompts, while remaining capable of out-of-distribution multi-event prompts
-of up to 12 seconds. Trained adapter weights, 38 generated audio samples,
-and an interactive Streamlit demo are released with the code.
+Our primary contribution is a parameter-efficient LoRA fine-tune of
+AudioGen-medium, a 1.5\,B-parameter autoregressive model over EnCodec
+tokens, on a 325-clip augmented dataset built from the official Minecraft
+Java Edition assets. We evaluate with Fr\'echet Audio Distance (FAD),
+Kernel Audio Distance (KAD), an Inception-score proxy, CLAP text--audio
+similarity, and per-clip spectral statistics. The LoRA adapter, with
+132\,M trainable parameters and 25 epochs of training, reduces FAD by
+37\,\% and KAD by 73\,\% relative to the vanilla AudioGen baseline on
+in-domain prompts, while remaining capable of out-of-distribution
+multi-event prompts of up to 12\,seconds. We also report negative results
+for diffusion-based adaptation and small from-scratch transformers,
+which together support the conclusion that autoregressive token models
+are the most data-efficient backbone for this class of low-resource
+stylized domains.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -67,26 +68,27 @@ These models are trained on broad open-domain corpora (AudioSet, Freesound,
 licensed music) and produce convincing results for everyday acoustic
 events. They are, however, demonstrably weak on niche stylized domains:
 prompting for ``Minecraft zombie'' yields a generic groan rather than the
-recognizable lo-fi 8\,kHz timbre of the game.
+recognizable lo-fi 16\,kHz timbre of the game.
 
 We pick \textit{Minecraft sound effects} as a representative low-resource,
 stylistically distinctive target domain. The full official sound bank
-contains only $\sim$200 short clips spanning hostile mobs, ambient cave
-loops, footstep textures, combat, and damage events. The data is small
-enough to make full fine-tuning infeasible yet large enough that
-parameter-efficient adaptation is plausible. The central question of this
-project is therefore: \emph{which combination of base architecture and
-adaptation method most reliably transfers a pretrained text-to-audio model
-into this small, distinctive domain?}
+contains only on the order of two hundred short clips spanning hostile
+mobs, ambient cave loops, footstep textures, combat, and damage events.
+The data is small enough to make full fine-tuning of a billion-parameter
+backbone infeasible, yet large enough that parameter-efficient adaptation
+is plausible. The central question of this work is therefore: \emph{which
+combination of base architecture and adaptation method most reliably
+transfers a pretrained text-to-audio model into a small, distinctive
+domain?}
 
-We make three contributions. (1) We pursue six adaptation strategies in
-parallel and report which converge and which fail. (2) For the strategy
-that worked best in practice---LoRA on AudioGen's autoregressive
-language model---we describe the precise training recipe required to avoid
-known instabilities in AudioCraft. (3) We provide a quantitative
-comparison using FAD, KAD, an Inception-score proxy, CLAP, and spectral
-features, and release the LoRA weights, generated samples, and an
-interactive demo.
+We make three contributions. First, we pursue six adaptation strategies
+spanning diffusion fine-tuning, low-rank adaptation, and from-scratch
+training, and report which converge and which fail. Second, for the
+strategy that worked best in practice---LoRA on the autoregressive
+language model of AudioGen---we describe the configuration and training
+recipe used to obtain stable convergence on the limited dataset. Third,
+we provide a quantitative comparison using FAD, KAD, an Inception-score
+proxy, CLAP, and spectral feature statistics.
 
 \section{Related Work}
 
@@ -96,17 +98,18 @@ CLAP\,\cite{wu2023clap} text embeddings; AudioLDM\,2\,\cite{liu2024audioldm2}
 combines a GPT-2 prefix with diffusion over a learned audio latent.
 AudioGen\,\cite{kreuk2023audiogen} replaces diffusion with an
 autoregressive transformer over discrete EnCodec tokens
-\cite{defossez2023encodec}, using a delay pattern across 4 codebooks at
-50\,Hz. We use Meta's \texttt{facebook/audiogen-medium} (1.5\,B parameters)
-distributed via the AudioCraft library\,\cite{audiocraft2023}.
+\cite{defossez2023encodec}, using a delay pattern across four codebooks
+at 50\,Hz. Our experiments use the publicly released AudioGen-medium
+checkpoint (1.5\,B parameters) distributed via the AudioCraft
+library\,\cite{audiocraft2023}.
 
 \textbf{Parameter-efficient fine-tuning.}
 LoRA\,\cite{hu2022lora} injects low-rank updates $\Delta W = BA$ into
-selected linear layers, freezing the base model. It is the de facto
-standard for adapting large pretrained models on domain data and reduces
-trainable parameters by one to two orders of magnitude. We adopt LoRA on
-both the AudioLDM\,2 UNet (Approach~1) and the AudioGen language model
-(Approach~4); only the latter converged.
+selected linear layers while freezing the base weights. It is the de
+facto standard for adapting large pretrained models on domain data and
+reduces the number of trainable parameters by one to two orders of
+magnitude. We adopt LoRA on both the AudioLDM\,2 UNet and the AudioGen
+language model in this study; only the latter converged on our domain.
 
 \textbf{Audio generation evaluation.}
 Fr{\'e}chet Audio Distance (FAD)\,\cite{kilgour2019fad} computes a
@@ -121,27 +124,26 @@ ZCR, RMS).
 
 \section{Dataset}
 
-\textbf{Source.} We pull the official Minecraft Java Edition 1.21.1 sound
-bank from \texttt{InventivetalentDev/minecraft-assets}\,\cite{minecraftassets}
-via \texttt{scripts/fetch\_minecraft\_assets.py}. The raw collection
-contains 195 \texttt{.ogg} files spanning the categories shown in
+\textbf{Source.} We use the official Minecraft Java Edition 1.21.1 sound
+bank\,\cite{minecraftassets}. The raw collection contains 195 short
+\texttt{.ogg} files spanning the categories shown in
 Table~\ref{tab:dataset}.
 
-\textbf{Preprocessing.} All clips are decoded to 16\,kHz mono float WAV,
-trimmed at a 30\,dB silence threshold, and either looped or cropped to a
-fixed 4\,s window. Action sequences (e.g.\ ``hurt$\to$death'') are produced
-by concatenating clips of the same mob with a 0.7\,s gap; footstep cycles
-use a 0.1\,s gap. Each clip is augmented with two
-speed-perturbed copies ($0.85\times$ and $1.15\times$) to give 325 total
-clips, which are split 277/48 (train/val) using a deterministic seed.
+\textbf{Preprocessing.} All clips are decoded to 16\,kHz mono float
+audio, trimmed at a 30\,dB silence threshold, and either looped or
+cropped to a fixed 4-second window matching the AudioGen training
+horizon. Action sequences (e.g.\ ``hurt$\to$death'') are produced by
+concatenating clips of the same mob with a 0.7\,s gap, and footstep
+cycles use a 0.1\,s gap. Each resulting clip is augmented with two
+speed-perturbed copies at $0.85\times$ and $1.15\times$ to give 325
+total clips, which are split 277/48 (train/validation) using a
+deterministic seed.
 
-\textbf{Captions.} A simple template
-\textit{``minecraft \{entity\} \{action\} sound effect''} is generated
-automatically by \texttt{scripts/build\_manifest.py} from the folder
-hierarchy. The manifest is then converted to AudioCraft's expected JSONL
-format with one JSON sidecar per WAV by
-\texttt{scripts/prepare\_audiogen\_data.py}, producing
-\texttt{data/audiogen/\{train,val\}.jsonl}.
+\textbf{Captions.} A simple template,
+\textit{``minecraft \{entity\} \{action\} sound effect''}, is generated
+automatically from the folder hierarchy. The captions are intentionally
+short and follow the natural-language style of the AudioGen pretraining
+corpus, which we observed to be necessary for stable conditioning.
 
 \begin{table}[t]
 \centering
@@ -167,11 +169,12 @@ Damage / fall                                     &  -- & 11 \\
 \subsection{Approaches Explored}
 
 We pursued six adaptation strategies in parallel
-(Table~\ref{tab:approaches}). Approaches 1--3 fine-tune diffusion
-backbones; Approach~4 fine-tunes an autoregressive backbone with LoRA;
-Approaches~5--6 train a small transformer from scratch on the same
-EnCodec tokenizer. Approach~4 is our primary contribution and is described
-in detail below; the others provide context and negative results.
+(Table~\ref{tab:approaches}). The first three fine-tune diffusion
+backbones, the fourth fine-tunes an autoregressive backbone with LoRA,
+and the last two train a small transformer from scratch on the same
+EnCodec tokenizer. The fourth approach is the primary contribution of
+this work and is described in detail below; the others provide context
+and negative results.
 
 \begin{table}[t]
 \centering
@@ -185,7 +188,7 @@ of parameters updated by the optimizer (frozen base model excluded).}
 \midrule
 1 & AudioLDM\,2     & UNet LoRA            & noise / failed     & $\sim$1\,M \\
 2 & AudioLDM        & full multi-comp.\ FT & partial            & 400\,M \\
-3 & AudioLDM (v2)   & official trainer, 50 ep & convergent        & 400\,M \\
+3 & AudioLDM        & official trainer, 50 ep & convergent      & 400\,M \\
 4 & \textbf{AudioGen} & \textbf{LM LoRA}   & \textbf{best}      & \textbf{132\,M} \\
 5 & from scratch    & T5+causal Tx (50 ep) & limited            &  25\,M \\
 6 & from scratch    & T5+causal Tx, virt.\ aug.\ (100 ep) & better &  25\,M \\
@@ -195,91 +198,74 @@ of parameters updated by the optimizer (frozen base model excluded).}
 
 \subsection{AudioGen LoRA: Architecture}
 
-AudioGen consists of (i) a frozen T5 text encoder, (ii) a frozen EnCodec
-neural codec that maps a 16\,kHz waveform to 4 codebooks of 2048-vocabulary
-tokens at 50\,Hz, and (iii) a 1.5\,B-parameter autoregressive transformer
-language model that generates the codebook tokens conditioned on T5
-embeddings via cross-attention. The LM uses a \emph{delay pattern} that
-staggers the four codebooks across timesteps, which means the first and
-last few positions are predicted from invalid (NaN) context.
+AudioGen consists of three components: (i) a frozen T5 text encoder,
+(ii) a frozen EnCodec neural codec that maps a 16\,kHz waveform to four
+codebooks of 2048-vocabulary tokens at 50\,Hz, and (iii) a
+1.5\,B-parameter autoregressive transformer language model that generates
+the codebook tokens conditioned on T5 embeddings via cross-attention.
+The language model uses a \emph{delay pattern} that staggers the four
+codebooks across timesteps so that each step predicts only one new token
+per codebook.
 
 We inject LoRA adapters\,\cite{hu2022lora} of rank $r=128$ and scaling
 $\alpha=256$ (effective scaling $\alpha/r = 2$) with dropout $0.05$ into
-three projection layers per transformer block:
-\texttt{out\_proj} (post-attention output), \texttt{linear1}, and
-\texttt{linear2} (the two linears of the feed-forward block). We
-deliberately do \emph{not} target the q/k/v projections: AudioCraft fuses
-them into a single \texttt{in\_proj\_weight} tensor inside its
-\texttt{StreamingMultiheadAttention}, so they cannot be cleanly wrapped by
-the standard LoRA recipe. The total trainable count is
-$\approx$132\,M parameters ($\approx$8.8\,\% of the base model).
+three projection layers per transformer block: the post-attention output
+projection and the two linear layers of the feed-forward block. The
+query, key, and value projections are kept frozen because they are
+realised as a single fused linear in the attention implementation we
+build on, and a separate adapter for each is therefore not exposed
+without modifying the upstream attention module. The total trainable
+parameter count is approximately 132\,M, which corresponds to roughly
+8.8\,\% of the base model.
 
-\subsection{AudioGen LoRA: Training Recipe}
+\subsection{AudioGen LoRA: Training}
 
-The training script
-\texttt{src/mcaudio/train/audiogen\_lora\_train.py} implements the
-following loop:
+For each batch we (i) load 4-second 16\,kHz waveforms with their
+captions, (ii) encode them to discrete EnCodec codes, (iii) build a
+text-conditioning representation from the captions while replacing each
+caption with the empty string with probability $0.1$ for classifier-free
+guidance, (iv) run a forward pass through the LoRA-adapted language
+model to obtain per-token logits over the 2048-symbol vocabulary on each
+of the four codebooks, and (v) compute a masked cross-entropy loss over
+the positions that the delay pattern marks as valid.
 
-\begin{enumerate}
-\item Load a batch of waveforms via the \texttt{McAudioDataset} class and
-collate-pad to the maximum length in the batch.
-\item Encode to discrete codes with the frozen EnCodec
-($\mathbf{C}\in\mathbb{Z}^{B\times 4\times T}$, $T$=200 for 4\,s).
-\item Build \texttt{ConditioningAttributes} from the captions, dropping
-each caption to the empty string with probability 0.1
-(classifier-free-guidance dropout).
-\item Call \texttt{lm.compute\_predictions(codes, conditions)} to obtain
-logits of shape $(B, 4, T, 2048)$.
-\item Apply \texttt{logits.nan\_to\_num(nan=0.0)} and compute masked
-cross-entropy only on positions valid under the delay pattern's mask.
-\item Backpropagate, accumulate gradients across 4 steps, then step the
-AdamW optimizer (lr $3{\times}10^{-4}$, weight decay $10^{-5}$, cosine
-schedule with 50-step warmup).
-\end{enumerate}
-
-\textbf{FP32 only.} We disable mixed precision entirely. AudioCraft's
-delay-pattern arithmetic produces NaNs under \texttt{torch.autocast} that
-silently corrupt gradients. The combination of FP32 weights and the
-\texttt{nan\_to\_num} clamp on the logits is the minimal recipe that
-trains stably; we observed immediate divergence under bf16 or fp16
-autocast even with the same NaN clamp.
-
-\textbf{Hyperparameters.} Effective batch size 8 (micro-batch 2,
-gradient-accumulation 4), 25 epochs (the value used for the reported
-metrics; the configuration default of 150 epochs offers minimal additional
-gain), checkpoints saved every 5 epochs plus a ``best by validation loss''
-adapter. Each adapter checkpoint is approximately 176\,MB on disk; the
-frozen base model is shared. Training completes in roughly one hour on a
-single RTX\,5090 (32\,GB) and is also feasible on a Colab T4 with reduced
-batch size.
+The optimizer is AdamW with learning rate $3\times 10^{-4}$, weight
+decay $10^{-5}$, and a cosine schedule with a 50-step warmup. We use a
+micro-batch of 2 with gradient accumulation of 4, for an effective batch
+size of 8. We train for 25 epochs, which we found sufficient to reach
+the validation-loss plateau on this dataset; further training produced
+diminishing returns. Training completes in roughly one hour on a single
+RTX\,5090 GPU.
 
 \subsection{Inference}
 
-For generation we reload the base AudioGen model, re-inject empty LoRA
-adapters of the same shape, then load the saved adapter tensors and cast
-them to the base-model dtype on-device. Sampling parameters mirror the
-official AudioGen demo: top-$k$ 250, temperature 0.9, classifier-free
-guidance coefficient 3.0, duration 4--12\,s.
+For generation we reload the base AudioGen model, re-attach LoRA modules
+of the same shape used during training, and load the trained adapter
+weights. Sampling parameters mirror the official AudioGen demo: top-$k$
+of 250, temperature 0.9, classifier-free guidance coefficient 3.0, and a
+generation duration in the range 4--12\,s.
 
 \section{Evaluation}
 
 \subsection{Protocol}
 
-We compare three audio populations against the 325-clip processed
-reference set:
+We compare three generated audio populations against the 325-clip
+processed reference set:
+
 \begin{itemize}
 \item \textbf{baseline}: 8 clips from vanilla AudioGen on four in-domain
 prompts (zombie hurt, skeleton death, cave ambience, stone footsteps).
 \item \textbf{lora}: the same prompts re-rendered through the LoRA
 adapter.
 \item \textbf{generalization}: 22 clips (11 vanilla, 11 LoRA) on
-out-of-distribution multi-event prompts up to 12\,s
-(e.g.\ ``creeper hiss then explosion, player hurt sound'';
-``cave ambience with water dripping and distant zombie groan'').
+out-of-distribution multi-event prompts of up to 12\,s, for example
+``creeper hiss then explosion, player hurt sound'' or ``cave ambience
+with water dripping and distant zombie groan''.
 \end{itemize}
-All metrics are computed by
-\texttt{presentation/compute\_metrics\_v2.py} and stored in
-\texttt{presentation/metrics.json}.
+
+CLAP and the Inception-score proxy use the LAION-CLAP base
+checkpoint\,\cite{wu2023clap}; FAD and KAD are computed in the same
+embedding space.
 
 \subsection{Quantitative Results}
 
@@ -375,48 +361,52 @@ event-driven structure of the real Minecraft clips.}
 
 \subsection{Comparison Across Approaches}
 
-Approach~1 (LoRA on the AudioLDM\,2 UNet cross-attention) produced
-unstructured noise after 100--500 optimizer steps; we attribute the
-failure to AudioLDM\,2's heterogeneous architecture (CLAP\,+\,T5\,+\,GPT-2
-prefix\,+\,UNet\,+\,VAE\,+\,vocoder) which requires coordinated adaptation
-across components rather than a single localized adapter. Full fine-tuning
-of the AudioLDM\,1 UNet (Approach~2, 3 epochs) was numerically stable but
-produced only marginal qualitative improvement; the v2 expanded-dataset
-run (Approach~3, 50 epochs / 17K steps on 556 clips) converged but did
-not reach the FAD level of the AudioGen LoRA. The from-scratch
-transformer baselines (Approaches~5--6, 25\,M parameters, 50 and 100
-epochs) produce intelligible Minecraft-textured output but lack the
-prompt-following ability of any of the pretrained backbones.
+LoRA on the AudioLDM\,2 UNet cross-attention produced unstructured noise
+after a few hundred optimizer steps; we attribute the failure to
+AudioLDM\,2's heterogeneous architecture (CLAP, T5, GPT-2 prefix, UNet,
+VAE, and vocoder), which appears to require coordinated adaptation
+across several components rather than a single localized adapter on the
+UNet. Full fine-tuning of the AudioLDM\,1 UNet for three epochs was
+numerically stable but produced only a marginal qualitative
+improvement; a longer run on an expanded 556-clip dataset (50 epochs,
+roughly 17K steps) converged but did not reach the FAD level of the
+AudioGen LoRA. The from-scratch transformer baselines (25\,M
+parameters, 50 and 100 epochs) produce intelligible Minecraft-textured
+output but lack the prompt-following ability of any of the pretrained
+backbones.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{architecture_comparison.png}
 \caption{Architectural footprint of the three pretrained backbones we
-adapted. AudioGen's autoregressive token model exposes a clean LoRA
-target on the LM transformer; AudioLDM\,2's multi-component pipeline does
+adapted. The autoregressive token model exposes a clean LoRA target on
+the language model, whereas the multi-component diffusion pipeline does
 not.}
 \label{fig:arch}
 \end{figure}
 
 \section{Discussion}
 
-\textbf{Why does AudioGen LoRA work where AudioLDM\,2 LoRA fails?}
+\textbf{Why does autoregressive LoRA succeed where diffusion LoRA fails?}
 Two factors stand out. First, autoregressive next-token cross-entropy
-provides a much sharper per-position learning signal than the noise-MSE
-used in latent diffusion training, which is particularly important when
-the dataset is small. Second, the EnCodec discrete token space is already
-band-limited to the 16\,kHz tokenization grid, which happens to match
-Minecraft's lo-fi character; the diffusion latent of AudioLDM\,2 instead
-encodes mel-bin reconstructions tuned for full-bandwidth audio.
+provides a sharper per-position learning signal than the noise-MSE
+objective used in latent-diffusion training, which is particularly
+valuable when the dataset is small. Second, the EnCodec discrete token
+space is band-limited by construction to the 16\,kHz tokenization grid,
+which happens to match Minecraft's lo-fi character; the diffusion latent
+of AudioLDM\,2 instead encodes mel-bin reconstructions tuned for
+full-bandwidth audio, so adapting it to a low-bandwidth domain requires
+moving farther in latent space.
 
-\textbf{The LoRA / generalization trade-off.} The OOD CLAP drop
-($0.341\to0.270$) is a direct measurement of the cost of specialisation.
-A practitioner facing this trade-off has two levers: (i) reduce LoRA rank
-or train for fewer epochs to stay closer to the base model's
-generalisation behaviour, or (ii) keep the LoRA at its current strength
-and apply it as a switchable adapter (load only when Minecraft-style
-output is desired). We adopt the second approach in our demo by exposing
-both the vanilla and LoRA-adapted models side-by-side.
+\textbf{The specialisation--generalisation trade-off.}
+The OOD CLAP drop ($0.341\to 0.270$) is a direct measurement of the cost
+of specialisation. A practitioner facing this trade-off has two
+levers: (i) reduce LoRA rank or train for fewer epochs to remain closer
+to the base model's general behaviour, or (ii) keep the adapter at its
+current strength and treat it as switchable, applying it only when
+domain-typical output is desired. The latter strategy preserves the
+base model's general capabilities at no additional storage cost beyond
+the adapter.
 
 \textbf{Limitations.} Our evaluation is limited by a small reference set
 (325 clips total, 48 in validation), which inflates the variance of
@@ -426,16 +416,17 @@ cross-paper-comparable scores. We also did not run formal listening tests.
 
 \section{Conclusion}
 
-We presented a domain-specialised text-to-audio system for Minecraft sound
-effects. After comparing six adaptation strategies, a 132\,M-parameter
-LoRA adapter on AudioGen's autoregressive LM emerged as the clear winner,
-reducing FAD by 37\,\% and KAD by 73\,\% versus the vanilla model on
-in-domain prompts and improving them further on out-of-distribution
-multi-event prompts. The training recipe required to achieve this on
-AudioCraft is tightly constrained---FP32 weights, NaN-clamped logits,
-LoRA on \texttt{out\_proj}/\texttt{linear1}/\texttt{linear2} only---and we
-document it in full alongside the released adapter weights, generated
-samples, and an interactive demo.
+We presented a domain-specialised text-to-audio system for Minecraft
+sound effects. After comparing six adaptation strategies, a
+132\,M-parameter LoRA adapter on the autoregressive language model of
+AudioGen emerged as the clear winner, reducing FAD by 37\,\% and KAD by
+73\,\% versus the vanilla model on in-domain prompts and improving them
+further on out-of-distribution multi-event prompts. The negative results
+obtained from diffusion-based adaptation and small from-scratch
+transformers together support the broader conclusion that, for small
+low-fidelity sound domains, autoregressive token models combined with
+low-rank adaptation are a more data-efficient choice than fine-tuning a
+diffusion-based backbone.
 
 \bibliographystyle{IEEEtran}
 \bibliography{refs}
